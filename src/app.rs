@@ -1,6 +1,5 @@
 use crate::canvas::Canvas;
 use crate::state::State;
-
 pub struct App {
     state: State,
 
