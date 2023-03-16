@@ -1,4 +1,7 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
-mod app;
-pub use app::TemplateApp;
+pub mod app;
+pub mod canvas;
+pub mod pixel;
+pub mod response;
+pub mod state;

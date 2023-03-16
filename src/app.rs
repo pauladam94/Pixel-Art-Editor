@@ -1,116 +1,140 @@
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
-    // Example stuff:
-    label: String,
+use crate::canvas::Canvas;
+use crate::state::State;
 
-    // this how you opt-out of serialization of a member
-    #[serde(skip)]
-    value: f32,
+pub struct App {
+    state: State,
+
+    canvas: Canvas,
+    show_canvas: bool,
+
+    show_ui: bool,
+
+    dark_mode: bool,
+
+    dx: f32,
+    dy: f32,
 }
 
-impl Default for TemplateApp {
+impl Default for App {
     fn default() -> Self {
         Self {
-            // Example stuff:
-            label: "Hello World!".to_owned(),
-            value: 2.7,
+            state: State::default(),
+
+            canvas: Canvas::default(),
+            show_canvas: true,
+
+            show_ui: true,
+
+            dark_mode: true,
+            dx: 10.0,
+            dy: 10.0,
         }
     }
 }
 
-impl TemplateApp {
+impl App {
     /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
-        if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-        }
-
+        // if let Some(storage) = cc.storage {
+        //     return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+        //}
         Default::default()
+    }
+
+    pub fn set_default(&mut self) {
+        *self = Default::default();
     }
 }
 
-impl eframe::App for TemplateApp {
-    /// Called by the frame work to save state before shutdown.
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
-    }
-
+impl eframe::App for App {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let Self { label, value } = self;
+        let Self {
+            state,
 
-        // Examples of how to create different panels and windows.
-        // Pick whichever suits you.
-        // Tip: a good default choice is to just keep the `CentralPanel`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
+            canvas,
+            show_canvas,
 
-        #[cfg(not(target_arch = "wasm32"))] // no File->Quit on web pages!
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Quit").clicked() {
-                        _frame.close();
+            show_ui,
+
+            dark_mode,
+            dx,
+            dy,
+        } = self;
+
+        //// UPDATE APP VALUE
+
+        // Window with a tuggle button to show or hide the UI
+        egui::Window::new("UI")
+            .resizable(false)
+            .collapsible(false)
+            .show(ctx, |ui| {
+                ui.toggle_value(show_ui, "Show UI");
+            });
+
+        if *show_ui {
+            egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+                // button to change the theme of the app
+                if ui.button("Change theme").clicked() {
+                    *dark_mode = !*dark_mode;
+                    if *dark_mode {
+                        ctx.set_visuals(egui::Visuals::dark());
+                    } else {
+                        ctx.set_visuals(egui::Visuals::light());
                     }
-                });
+                }
+                // button clear canvas
+                if ui
+                    .button("Clear canvas")
+                    .on_hover_text("Clear the canvas")
+                    .clicked()
+                {
+                    canvas.clear();
+                }
+
+                ui.label("- Choose the size of the canvas and the color you want to draw");
+                ui.label("- Then click on the canvas to draw");
+                ui.label("- You can moove the canvas with the arrow keys or ");
             });
-        });
 
-        egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            ui.heading("Side Panel");
-
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(label);
-            });
-
-            ui.add(egui::Slider::new(value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                *value += 1.0;
-            }
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.label("powered by ");
-                    ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-                    ui.label(" and ");
-                    ui.hyperlink_to(
-                        "eframe",
-                        "https://github.com/emilk/egui/tree/master/crates/eframe",
-                    );
-                    ui.label(".");
-                });
-            });
-        });
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-
-            ui.heading("eframe template");
-            ui.hyperlink("https://github.com/emilk/eframe_template");
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/master/",
-                "Source code."
-            ));
-            egui::warn_if_debug_build(ui);
-        });
-
-        if false {
-            egui::Window::new("Window").show(ctx, |ui| {
-                ui.label("Windows can be moved by dragging them.");
-                ui.label("They are automatically sized based on contents.");
-                ui.label("You can turn on resizing and scrolling if you like.");
-                ui.label("You would normally choose either panels OR windows.");
+            egui::SidePanel::left("side_panel").show(ctx, |ui| {
+                canvas.stroke_ui(ui);
+                canvas.state_ui(ui, "State canvas".to_string());
             });
         }
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::warn_if_debug_build(ui);
+
+            // Handle keyboard events
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                canvas.move_canvas(0.0, -*dy);
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+                canvas.move_canvas(0.0, *dy);
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+                canvas.move_canvas(-*dx, 0.0);
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
+                canvas.move_canvas(*dx, 0.0);
+            }
+            // Handle graph events
+            let events = ui.input(|i| i.clone().events);
+            for event in events.iter() {
+                canvas.handle_event(event, state);
+            }
+
+            // Draw the App
+            if *show_canvas {
+                canvas.draw(ui);
+            }
+        });
     }
 }
