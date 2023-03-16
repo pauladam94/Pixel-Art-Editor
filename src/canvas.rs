@@ -2,20 +2,32 @@ use crate::pixel::Pixel;
 use crate::state::State;
 
 #[derive(Debug, PartialEq)]
-pub enum StateCanvas {
+pub enum CanvasState {
     Drag,
     Draw,
 }
-impl Default for StateCanvas {
+impl Default for CanvasState {
     fn default() -> Self {
         Self::Draw
     }
 }
 
 #[derive(Debug)]
+pub enum ClickState {
+    Left,
+    Right,
+}
+impl Default for ClickState {
+    fn default() -> Self {
+        Self::Left
+    }
+}
+
+#[derive(Debug)]
 pub struct Canvas {
     pos: egui::Pos2,
-    pub state: StateCanvas,
+    pub state: CanvasState,
+    pub click_state: ClickState,
 
     stroke: egui::Stroke,
     pub width_pixel: f32,
@@ -55,7 +67,8 @@ impl Canvas {
         }
         Self {
             pos,
-            state: StateCanvas::default(),
+            state: CanvasState::default(),
+            click_state: ClickState::default(),
             stroke,
             width_pixel: 10.0,
             height_pixel: 10.0,
@@ -207,8 +220,8 @@ impl Canvas {
     pub fn state_ui(&mut self, ui: &mut egui::Ui, text: String) {
         ui.horizontal(|ui| {
             ui.label(text);
-            ui.radio_value(&mut self.state, StateCanvas::Drag, "Drag");
-            ui.radio_value(&mut self.state, StateCanvas::Draw, "Draw");
+            ui.radio_value(&mut self.state, CanvasState::Drag, "Drag");
+            ui.radio_value(&mut self.state, CanvasState::Draw, "Draw");
         });
     }
 
@@ -217,7 +230,7 @@ impl Canvas {
             State::Idle => {
                 if let egui::Event::PointerButton {
                     pos,
-                    button: egui::PointerButton::Primary,
+                    button,
                     pressed,
                     ..
                 } = event
@@ -225,6 +238,15 @@ impl Canvas {
                     if self.contains(*pos) & *pressed {
                         self.drag_start = *pos;
                         self.previous_drag = *pos;
+                        match button {
+                            egui::PointerButton::Primary => {
+                                self.click_state = ClickState::Left;
+                            }
+                            egui::PointerButton::Secondary => {
+                                self.click_state = ClickState::Right;
+                            }
+                            _ => {}
+                        }
                         *state = State::Drag;
                     }
                 }
@@ -236,25 +258,29 @@ impl Canvas {
                     }
                 }
                 egui::Event::PointerMoved(pos) => match self.state {
-                    StateCanvas::Draw => {
+                    CanvasState::Draw => {
                         if self.contains(*pos) {
                             let delta = *pos - self.pos;
                             let line = (delta.y / self.height_pixel) as usize;
                             let col = (delta.x / self.width_pixel) as usize;
 
                             if line < self.line && col < self.col {
-                                for (i, j) in self.bresenham(self.previous_drag, *pos) {
-                                    self.pixels[j][i].fix_color(self.color_pick_left_click);
-                                    // symetry features
-                                    // if self.symetry {
-                                    //    self.pixels[i][j].fix_color(self.color_pick_left_click);
-                                    // }
+                                for (j, i) in self.bresenham(self.previous_drag, *pos) {
+                                    match self.click_state {
+                                        ClickState::Left => {
+                                            self.pixels[i][j].fix_color(self.color_pick_left_click);
+                                        }
+                                        ClickState::Right => {
+                                            self.pixels[i][j]
+                                                .fix_color(self.color_pick_right_click);
+                                        }
+                                    }
                                 }
                             }
                             self.previous_drag = *pos;
                         }
                     }
-                    StateCanvas::Drag => {
+                    CanvasState::Drag => {
                         let delta = *pos - self.drag_start;
                         self.drag_start = *pos;
                         self.pos += delta;
